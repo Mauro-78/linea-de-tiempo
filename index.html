@@ -208,7 +208,7 @@
             <option value="bce">a.e.C.</option>
           </select>
         </div>
-        <div class="form-hint">Mes y día opcionales abajo</div>
+        <div class="form-hint">Mes y día opcionales: formato MM-DD (ej: 11-13 = 13 de noviembre)</div>
       </div>
       <div class="form-group">
         <label class="form-label">Mes-Día inicio</label>
@@ -300,9 +300,20 @@ function save() {
 }
 
 function makeDate(year, md) {
-  const d = md && /^\d{2}-\d{2}$/.test(md) ? md : '06-15';
-  const abs = String(Math.abs(year)).padStart(4, '0');
-  return new Date(`${year < 0 ? '-' : ''}${abs}-${d}`);
+  // Vis.js tiene un bug conocido con fechas negativas usando string ISO.
+  // La solución correcta es usar Date.UTC directamente.
+  let month = 6, day = 15;
+  if (md && /^\d{2}-\d{2}$/.test(md)) {
+    const parts = md.split('-');
+    month = parseInt(parts[0], 10);
+    day   = parseInt(parts[1], 10);
+  }
+  // Para años a.e.C. usamos setFullYear después de crear la fecha,
+  // porque el constructor de Date no maneja bien años < 100 ni negativos vía string.
+  const d = new Date(0);
+  d.setUTCFullYear(year, month - 1, day);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
 }
 
 function displayYear(y) {
@@ -334,17 +345,21 @@ function renderTimeline() {
   const items = new vis.DataSet(filtered.map(e => {
     const cat = getCat(e.catId);
     const color = cat ? cat.color : '#888';
+    const startDate = makeDate(e.startYear, e.startMD);
+    const hasRange = e.endYear != null && !(e.endYear === e.startYear && e.endMD === e.startMD);
+    const endDate = hasRange ? makeDate(e.endYear, e.endMD) : undefined;
     return {
       id: e.id,
       content: `<span style="font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif">${e.title}</span>`,
-      start: makeDate(e.startYear, e.startMD),
-      end: e.endYear != null ? makeDate(e.endYear, e.endMD) : undefined,
-      title: `<b>${e.title}</b><br>${displayYear(e.startYear)}${e.endYear != null ? ' → ' + displayYear(e.endYear) : ''}${e.desc ? '<br><span style="color:#aaa">' + e.desc + '</span>' : ''}`,
+      start: startDate,
+      end: endDate,
+      type: hasRange ? 'range' : 'point',
+      title: `<b>${e.title}</b><br>${displayYear(e.startYear)}${hasRange ? ' -> ' + displayYear(e.endYear) : ''}${e.desc ? '<br><span style="color:#aaa">' + e.desc + '</span>' : ''}`,
       style: `background:${color}22;border-color:${color};color:${color};border-radius:4px;padding:2px 8px;font-family:'DM Sans',sans-serif;`
     };
   }));
   const container = document.getElementById('vis-container');
-  const opts = { height: '380px', zoomMin: 1000*60*60*24*30, zoomMax: 1000*60*60*24*365*8000, moveable: true, showCurrentTime: false };
+  const opts = { height: '380px', zoomMin: 1000*60*60*24*30, zoomMax: 1000*60*60*24*365.25*10000, moveable: true, showCurrentTime: false };
   if (tlInstance) {
     tlInstance.setItems(items);
     if (filtered.length) setTimeout(() => tlInstance.fit(), 100);
