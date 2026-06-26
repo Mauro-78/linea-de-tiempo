@@ -131,7 +131,8 @@
     <div class="header-icon">⏳</div>
     <span class="header-title">Línea de Tiempo</span>
   </div>
-  <div style="display:flex;align-items:center;gap:16px">
+  <div style="display:flex;align-items:center;gap:12px">
+    <button id="btn-connect" onclick="requestAuth()" style="display:none;padding:6px 14px;background:#8b5cf6;color:white;border:none;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:var(--font-body)">🔑 Conectar Drive</button>
     <span id="sync-status" style="font-size:12px;color:var(--text2);cursor:default;transition:color 0.3s">⏳ Iniciando...</span>
     <span id="ev-count" style="font-size:12px;color:var(--text2)">0 eventos</span>
   </div>
@@ -315,42 +316,62 @@ function setSyncStatus(state, msg) {
 // ── GOOGLE API INIT ─────────────────────────────────────────────────────────
 function gapiLoaded() {
   gapi.load('client', async () => {
-    await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
-    gapiReady = true;
-    maybeLoadData();
+    try {
+      await gapi.client.init({
+        apiKey: API_KEY,
+        discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest']
+      });
+      gapiReady = true;
+      maybeLoadData();
+    } catch(e) {
+      console.error('gapi init error:', e);
+      setSyncStatus('error', 'Error al iniciar Google API');
+      loadFromLocal();
+    }
   });
 }
 
 function gisLoaded() {
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    callback: async (resp) => {
-      if (resp.error) { setSyncStatus('error', 'Error de autenticación'); return; }
-      setSyncStatus('saving', 'Cargando datos...');
-      await loadFromDrive();
-    },
-  });
-  gisReady = true;
-  maybeLoadData();
+  try {
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: async (resp) => {
+        if (resp.error) {
+          console.error('OAuth error:', resp);
+          setSyncStatus('error', 'Error de autenticación: ' + resp.error);
+          return;
+        }
+        document.getElementById('btn-connect').style.display = 'none';
+        setSyncStatus('saving', 'Cargando datos...');
+        await loadFromDrive();
+      },
+    });
+    gisReady = true;
+    maybeLoadData();
+  } catch(e) {
+    console.error('gis init error:', e);
+    setSyncStatus('error', 'Error al iniciar OAuth');
+    loadFromLocal();
+  }
 }
 
 function maybeLoadData() {
   if (!gapiReady || !gisReady) return;
-  // Intentar cargar sin pedir login (token previo en memoria)
-  if (gapi.client.getToken() === null) {
-    // No hay token → cargar desde localStorage y pedir auth
-    loadFromLocal();
-    setSyncStatus('auth', 'Clic para sincronizar con Drive');
-    document.getElementById('sync-status').style.cursor = 'pointer';
-    document.getElementById('sync-status').onclick = requestAuth;
-  } else {
-    loadFromDrive();
-  }
+  loadFromLocal(); // cargar local inmediatamente para no mostrar app vacía
+  const el = document.getElementById('sync-status');
+  el.style.cursor = 'pointer';
+  el.title = 'Clic para conectar con Google Drive';
+  el.addEventListener('click', requestAuth, { once: false });
+  setSyncStatus('auth', 'Sin conectar a Drive');
+  // Mostrar botón visible
+  document.getElementById('btn-connect').style.display = 'block';
 }
 
 function requestAuth() {
-  tokenClient.requestAccessToken({ prompt: '' });
+  if (!tokenClient) { setSyncStatus('error', 'OAuth no inicializado'); return; }
+  // prompt:'consent' fuerza mostrar el popup aunque ya haya dado permiso antes
+  tokenClient.requestAccessToken({ prompt: 'consent' });
 }
 
 // ── CARGAR DATOS ────────────────────────────────────────────────────────────
