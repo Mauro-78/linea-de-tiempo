@@ -275,8 +275,6 @@
 </div>
 
 <!-- Google API -->
-<script src="https://apis.google.com/js/api.js"></script>
-<script src="https://accounts.google.com/gsi/client"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
 <script>
 // ── CONFIGURACIÓN GOOGLE DRIVE ──────────────────────────────────────────────
@@ -686,9 +684,8 @@ window.gapiLoaded = gapiLoaded;
 window.gisLoaded  = gisLoaded;
 </script>
 
-<!-- Cargar Google API (los onload llaman a gapiLoaded/gisLoaded) -->
-<script src="https://apis.google.com/js/api.js?onload=gapiLoaded" async defer></script>
-<script src="https://accounts.google.com/gsi/client" onload="gisLoaded" async defer></script>
+<script src="https://apis.google.com/js/api.js?onload=gapiLoaded"></script>
+<script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 
 <!--
 ════════════════════════════════════════════════════════════
