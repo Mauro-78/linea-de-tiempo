@@ -1,0 +1,25 @@
+{
+  "name": "Línea de Tiempo",
+  "short_name": "Línea de Tiempo",
+  "description": "Línea de tiempo personal e histórica",
+  "start_url": "/linea-de-tiempo/",
+  "scope": "/linea-de-tiempo/",
+  "display": "standalone",
+  "background_color": "#0f0f0f",
+  "theme_color": "#0f0f0f",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

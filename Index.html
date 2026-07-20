@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Línea de Tiempo</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.css" />
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#0f0f0f" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Línea de Tiempo" />
+<link rel="apple-touch-icon" href="icon-192.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
+<style>
+:root {
+  --bg:#0f0f0f; --bg2:#181818; --bg3:#222; --border:#2e2e2e;
+  --text:#e8e4dc; --text2:#888; --text3:#555;
+  --accent:#c4a35a; --accent2:#8b5cf6; --radius:10px;
+  --font-d:'Lora',serif; --font-b:'DM Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font-b);min-height:100vh}
+
+/* HEADER */
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--bg)}
+.hdr-left{display:flex;align-items:center;gap:10px}
+.hdr-icon{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:15px}
+.hdr-title{font-family:var(--font-d);font-size:17px;font-weight:600}
+.hdr-right{display:flex;align-items:center;gap:12px}
+#sync-badge{font-size:11px;padding:3px 10px;border-radius:20px;background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+#ev-count{font-size:12px;color:var(--text2)}
+
+/* TABS */
+nav{display:flex;padding:0 24px;border-bottom:1px solid var(--border);background:var(--bg)}
+.tab{padding:11px 16px;font-size:13px;cursor:pointer;border:none;background:none;color:var(--text2);border-bottom:2px solid transparent;transition:all .15s;font-family:var(--font-b)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover:not(.active){color:var(--text)}
+
+.content{padding:20px 24px}
+
+/* PILLS */
+.cat-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.pill{padding:4px 13px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid transparent;transition:all .2s;font-weight:500}
+.pill.all{background:var(--bg3);color:var(--text2);border-color:var(--border)}
+.pill.all.active{background:var(--accent);color:#0f0f0f;border-color:var(--accent)}
+
+/* VIS */
+#vis-wrap{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border)}
+.vis-timeline{background:var(--bg2)!important;border:none!important}
+.vis-panel.vis-center,.vis-panel.vis-left,.vis-panel.vis-right,.vis-panel.vis-top,.vis-panel.vis-bottom{border-color:var(--border)!important}
+.vis-time-axis .vis-text{color:var(--text2)!important;font-family:var(--font-b)!important;font-size:11px!important}
+.vis-time-axis .vis-grid.vis-minor{border-color:var(--border)!important}
+.vis-time-axis .vis-grid.vis-major{border-color:#3a3a3a!important}
+.vis-current-time{background:var(--accent)!important;opacity:.5}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px}
+.toolbar-l{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.s-input,.f-select{padding:7px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg2);color:var(--text);outline:none;font-family:var(--font-b);transition:border .15s}
+.s-input{width:200px}
+.s-input:focus,.f-select:focus{border-color:var(--accent)}
+.btn-p{display:flex;align-items:center;gap:6px;padding:7px 15px;background:var(--accent);color:#0f0f0f;border:none;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font-b);transition:opacity .15s;white-space:nowrap}
+.btn-p:hover{opacity:.85}
+.btn-p.purple{background:var(--accent2);color:white}
+
+/* TABLE */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:9px 13px;font-weight:500;font-size:11px;color:var(--text3);border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+td{padding:10px 13px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--bg3)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:500}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.btn-i{background:none;border:none;cursor:pointer;padding:4px 6px;border-radius:6px;color:var(--text2);transition:all .15s;font-size:14px}
+.btn-i:hover{background:var(--bg3);color:var(--text)}
+.btn-i.d:hover{color:#e05555}
+.empty{text-align:center;padding:40px 20px;color:var(--text3);font-size:13px}
+
+/* MODAL */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px)}
+.backdrop.open{display:flex}
+.modal{background:var(--bg2);border-radius:14px;border:1px solid var(--border);padding:26px;width:520px;max-width:96vw;max-height:92vh;overflow-y:auto}
+.modal-title{font-family:var(--font-d);font-size:16px;font-weight:600;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between}
+.btn-back{background:none;border:1px solid var(--border);color:var(--text2);font-size:12px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--font-b);transition:all .15s}
+.btn-back:hover{background:var(--bg3);color:var(--text)}
+.fg{margin-bottom:13px}
+.fl{display:block;font-size:11px;font-weight:500;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em}
+.fi,.fs,.ft{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg3);color:var(--text);outline:none;font-family:var(--font-b);transition:border .15s}
+.fi:focus,.fs:focus,.ft:focus{border-color:var(--accent)}
+.ft{min-height:65px;resize:vertical}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.fhint{font-size:11px;color:var(--text3);margin-top:3px}
+.yg{display:flex}
+.yg input{flex:1;border-radius:8px 0 0 8px}
+.yg select{border-left:none;border-radius:0 8px 8px 0;width:auto;min-width:80px;background:var(--bg)}
+.m-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+.btn-cancel{padding:7px 15px;border:1px solid var(--border);border-radius:8px;background:none;color:var(--text);font-size:13px;cursor:pointer;font-family:var(--font-b)}
+.btn-cancel:hover{background:var(--bg3)}
+.btn-save{padding:7px 15px;background:var(--accent);color:#0f0f0f;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font-b)}
+.btn-save:hover{opacity:.85}
+
+/* DETALLE */
+.detail-img{width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-bottom:14px;border:1px solid var(--border)}
+.detail-field{margin-bottom:10px;font-size:13px;line-height:1.6}
+.detail-label{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:3px}
+.detail-link{color:var(--accent);text-decoration:none;word-break:break-all}
+.detail-link:hover{text-decoration:underline}
+.comments-section{margin-top:18px;border-top:1px solid var(--border);padding-top:14px}
+.comment-item{background:var(--bg3);border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:13px;line-height:1.5;position:relative}
+.comment-date{font-size:11px;color:var(--text3);margin-top:4px}
+.comment-del{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px}
+.comment-del:hover{color:#e05555}
+.comment-form{display:flex;gap:8px;margin-top:10px}
+.comment-input{flex:1;padding:8px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg3);color:var(--text);outline:none;font-family:var(--font-b)}
+.comment-input:focus{border-color:var(--accent)}
+.btn-comment{padding:8px 14px;background:var(--accent2);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-family:var(--font-b);white-space:nowrap}
+
+/* IMG upload */
+.img-preview{width:100%;max-height:160px;object-fit:cover;border-radius:8px;margin-top:8px;border:1px solid var(--border);display:none}
+.upload-btn{display:flex;align-items:center;gap:6px;padding:7px 13px;border:1px dashed var(--border);border-radius:8px;background:var(--bg3);color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;width:100%;justify-content:center}
+.upload-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;z-index:999;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.ok{background:#1D9E75;color:white}
+.toast.err{background:#e05555;color:white}
+
+/* Loading */
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:200;flex-direction:column;gap:14px}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+</style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loading">
+  <div class="spinner"></div>
+  <span style="font-size:13px;color:var(--text2)">Conectando con la base de datos...</span>
+</div>
+
+<header>
+  <div class="hdr-left">
+    <div class="hdr-icon">⏳</div>
+    <span class="hdr-title">Línea de Tiempo</span>
+  </div>
+  <div class="hdr-right">
+    <span id="sync-badge">⏳ Conectando...</span>
+    <span id="ev-count" style="font-size:12px;color:var(--text2)">0 eventos</span>
+  </div>
+</header>
+
+<nav>
+  <button class="tab active" onclick="switchTab('timeline')">🗓 Timeline</button>
+  <button class="tab" onclick="switchTab('eventos')">📋 Eventos</button>
+  <button class="tab" onclick="switchTab('categorias')">🏷 Categorías</button>
+</nav>
+
+<div class="content">
+
+  <!-- TIMELINE -->
+  <div id="tab-timeline">
+    <div class="cat-filters" id="cat-pills"></div>
+    <div id="vis-wrap" style="height:400px"></div>
+    <p style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">Arrastrá para navegar · Scroll para zoom · Clic en un evento para ver detalles</p>
+  </div>
+
+  <!-- EVENTOS -->
+  <div id="tab-eventos" style="display:none">
+    <div class="toolbar">
+      <div class="toolbar-l">
+        <input type="text" class="s-input" placeholder="Buscar eventos..." oninput="setSearch(this.value)" />
+        <select class="f-select" id="filter-cat" onchange="setCatFilter(this.value)">
+          <option value="">Todas las categorías</option>
+        </select>
+      </div>
+      <button class="btn-p" onclick="openEventModal()">+ Nuevo evento</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Título</th><th>Inicio</th><th>Fin</th><th>Categoría</th><th></th></tr></thead>
+        <tbody id="ev-tbody"></tbody>
+      </table>
+      <div class="empty" id="ev-empty" style="display:none">Sin eventos todavía.</div>
+    </div>
+  </div>
+
+  <!-- CATEGORIAS -->
+  <div id="tab-categorias" style="display:none">
+    <div class="toolbar">
+      <span style="font-size:13px;color:var(--text2)">Administrá las categorías</span>
+      <button class="btn-p" onclick="openCatModal()">+ Nueva categoría</button>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Nombre</th><th>Color</th><th>Eventos</th><th></th></tr></thead>
+        <tbody id="cat-tbody"></tbody>
+      </table>
+      <div class="empty" id="cat-empty" style="display:none">Sin categorías.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL EVENTO -->
+<div class="backdrop" id="ev-modal" onclick="handleBd(event,'ev-modal')">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="ev-modal-title">Nuevo evento</span>
+      <button class="btn-back" onclick="closeModal('ev-modal');switchTab('timeline')">← Volver al timeline</button>
+    </div>
+
+    <div class="fg">
+      <label class="fl">Título *</label>
+      <input type="text" class="fi" id="f-title" placeholder="Nombre del evento" />
+    </div>
+    <div class="fg">
+      <label class="fl">Descripción</label>
+      <textarea class="ft" id="f-desc" placeholder="Descripción detallada..."></textarea>
+    </div>
+
+    <div class="fr">
+      <div class="fg">
+        <label class="fl">Año inicio *</label>
+        <div class="yg">
+          <input type="number" class="fi" id="f-sy" placeholder="Ej: 33" />
+          <select class="fs" id="f-se"><option value="ce">d.C.</option><option value="bce">a.e.C.</option></select>
+        </div>
+        <div class="fhint">Formato MM-DD para mes/día (ej: 11-13)</div>
+      </div>
+      <div class="fg">
+        <label class="fl">Mes-Día inicio</label>
+        <input type="text" class="fi" id="f-smd" placeholder="MM-DD (opcional)" />
+      </div>
+    </div>
+
+    <div class="fr">
+      <div class="fg">
+        <label class="fl">Año fin</label>
+        <div class="yg">
+          <input type="number" class="fi" id="f-ey" placeholder="opcional" />
+          <select class="fs" id="f-ee"><option value="ce">d.C.</option><option value="bce">a.e.C.</option></select>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Mes-Día fin</label>
+        <input type="text" class="fi" id="f-emd" placeholder="MM-DD (opcional)" />
+      </div>
+    </div>
+
+    <div class="fg">
+      <label class="fl">Categoría</label>
+      <select class="fs" id="f-cat"></select>
+    </div>
+
+    <div class="fg">
+      <label class="fl">Enlace (URL)</label>
+      <input type="url" class="fi" id="f-link" placeholder="https://..." />
+    </div>
+
+    <div class="fg">
+      <label class="fl">Imagen</label>
+      <label class="upload-btn" for="f-img-file">📷 Seleccionar imagen</label>
+      <input type="file" id="f-img-file" accept="image/*" style="display:none" onchange="previewImg(this)" />
+      <img id="f-img-preview" class="img-preview" />
+      <input type="hidden" id="f-img-url" />
+    </div>
+
+    <div class="m-actions">
+      <button class="btn-cancel" onclick="closeModal('ev-modal')">Cancelar</button>
+      <button class="btn-save" id="btn-save-ev" onclick="saveEvent()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CATEGORÍA -->
+<div class="backdrop" id="cat-modal" onclick="handleBd(event,'cat-modal')">
+  <div class="modal" style="width:380px">
+    <div class="modal-title"><span id="cat-modal-title">Nueva categoría</span></div>
+    <div class="fg">
+      <label class="fl">Nombre *</label>
+      <input type="text" class="fi" id="fc-name" placeholder="Ej: Historia..." />
+    </div>
+    <div class="fg">
+      <label class="fl">Color</label>
+      <select class="fs" id="fc-color">
+        <option value="#378ADD">Azul</option>
+        <option value="#8b5cf6">Violeta</option>
+        <option value="#c4a35a">Dorado</option>
+        <option value="#1D9E75">Verde</option>
+        <option value="#D85A30">Naranja</option>
+        <option value="#D4537E">Rosa</option>
+        <option value="#E24B4A">Rojo</option>
+        <option value="#888780">Gris</option>
+      </select>
+    </div>
+    <div class="m-actions">
+      <button class="btn-cancel" onclick="closeModal('cat-modal')">Cancelar</button>
+      <button class="btn-save" onclick="saveCat()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE -->
+<div class="backdrop" id="detail-modal" onclick="handleBd(event,'detail-modal')">
+  <div class="modal" style="width:560px">
+    <div class="modal-title">
+      <span id="d-title">Detalle</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn-back" onclick="closeModal('detail-modal');switchTab('timeline')">← Timeline</button>
+        <button class="btn-back" id="d-edit-btn" onclick="editFromDetail()">✏️ Editar</button>
+      </div>
+    </div>
+    <img id="d-img" class="detail-img" style="display:none" />
+    <div class="detail-field" id="d-dates"></div>
+    <div class="detail-field" id="d-cat"></div>
+    <div class="detail-field" id="d-desc" style="white-space:pre-wrap;line-height:1.7"></div>
+    <div class="detail-field" id="d-link"></div>
+
+    <div class="comments-section">
+      <div style="font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Comentarios</div>
+      <div id="d-comments"></div>
+      <div class="comment-form">
+        <input type="text" class="comment-input" id="new-comment" placeholder="Agregar comentario..." onkeydown="if(event.key==='Enter')addComment()" />
+        <button class="btn-comment" onclick="addComment()">Agregar</button>
+      </div>
+    </div>
+    <div class="m-actions" style="margin-top:14px">
+      <button class="btn-cancel d" onclick="deleteFromDetail()" style="color:#e05555;border-color:#e0555544">🗑 Eliminar evento</button>
+      <button class="btn-save" onclick="closeModal('detail-modal')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis/4.21.0/vis.min.js"></script>
+<script>
+// ── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+const SB_URL = 'https://pzntuakiojjivcwcypvv.supabase.co';
+const SB_KEY = 'sb_publishable_nJaZ8NDiBwMcj2KNC6UwcQ_5i40ncxa';
+
+async function sbGet(table, params='') {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?${params}`, {
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json' }
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPost(table, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbPatch(table, id, body) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function sbDelete(table, id) {
+  const r = await fetch(`${SB_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` }
+  });
+  if (!r.ok) throw new Error(await r.text());
+}
+async function sbUpload(file) {
+  const ext = file.name.split('.').pop();
+  const path = `ev_${Date.now()}.${ext}`;
+  const r = await fetch(`${SB_URL}/storage/v1/object/imagenes/${path}`, {
+    method: 'POST',
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, 'Content-Type': file.type },
+    body: file
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return `${SB_URL}/storage/v1/object/public/imagenes/${path}`;
+}
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let events = [], cats = [], editEvId = null, editCatId = null, detailEvId = null;
+let searchQ = '', filterCat = '', tlCat = 'all', tlInstance = null;
+let pendingImgFile = null;
+
+// ── INIT ─────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const [c, e] = await Promise.all([
+      sbGet('categorias', 'order=id.asc'),
+      sbGet('eventos', 'order=anio_inicio.asc')
+    ]);
+    cats = c; events = e;
+    setSyncBadge('ok');
+    renderAll();
+  } catch(err) {
+    console.error(err);
+    setSyncBadge('error');
+    toast('Error al conectar con la base de datos', 'err');
+  }
+  document.getElementById('loading').style.display = 'none';
+}
+
+function setSyncBadge(state) {
+  const el = document.getElementById('sync-badge');
+  const map = { ok:['✅ Sincronizado','#1D9E75'], error:['❌ Sin conexión','#e05555'], saving:['⏳ Guardando...','var(--accent)'] };
+  const [text, color] = map[state] || map.ok;
+  el.textContent = text; el.style.color = color;
+}
+
+// ── HELPERS ──────────────────────────────────────────────────────────────────
+function makeDate(year, md) {
+  let month = 6, day = 15;
+  if (md && /^\d{2}-\d{2}$/.test(md)) { [month, day] = md.split('-').map(Number); }
+  const d = new Date(0); d.setUTCFullYear(year, month-1, day); d.setUTCHours(0,0,0,0);
+  return d;
+}
+function displayYear(y) {
+  if (y == null) return '—';
+  return y < 0 ? `${Math.abs(y)} a.e.C.` : `${y} d.C.`;
+}
+function getCat(id) { return cats.find(c => c.id === id) || null; }
+
+function toast(msg, type='ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast ${type} show`;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderPills(); renderTimeline(); renderEvTable(); renderCatTable(); refreshSelects();
+  document.getElementById('ev-count').textContent = `${events.length} evento${events.length!==1?'s':''}`;
+}
+
+function renderPills() {
+  const el = document.getElementById('cat-pills');
+  let h = `<button class="pill all ${tlCat==='all'?'active':''}" onclick="setTlCat('all')">Todos</button>`;
+  cats.forEach(c => {
+    const a = tlCat===c.id;
+    h += `<button class="pill" style="background:${a?c.color:c.color+'20'};color:${a?'#0f0f0f':c.color};border-color:${c.color}55" onclick="setTlCat(${c.id})">${c.nombre}</button>`;
+  });
+  el.innerHTML = h;
+}
+function setTlCat(v) { tlCat=v; renderPills(); renderTimeline(); }
+
+function renderTimeline() {
+  const filtered = tlCat==='all' ? events : events.filter(e => e.categoria_id===tlCat);
+  const items = new vis.DataSet(filtered.map(e => {
+    const cat = getCat(e.categoria_id);
+    const color = cat ? cat.color : '#888';
+    const hasRange = e.anio_fin!=null && !(e.anio_fin===e.anio_inicio && e.mes_dia_fin===e.mes_dia_inicio);
+    return {
+      id: e.id,
+      content: `<span style="font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif">${e.titulo}</span>`,
+      start: makeDate(e.anio_inicio, e.mes_dia_inicio),
+      end: hasRange ? makeDate(e.anio_fin, e.mes_dia_fin) : undefined,
+      type: hasRange ? 'range' : 'point',
+      title: `<b>${e.titulo}</b><br>${displayYear(e.anio_inicio)}${hasRange?' → '+displayYear(e.anio_fin):''}`,
+      style: `background:${color}22;border-color:${color};color:${color};border-radius:4px;padding:2px 8px;`
+    };
+  }));
+  const container = document.getElementById('vis-wrap');
+  const opts = { height:'380px', zoomMin:1000*60*60*24*30, zoomMax:1000*60*60*24*365.25*10000, moveable:true, showCurrentTime:false };
+  if (tlInstance) { tlInstance.setItems(items); if(filtered.length) setTimeout(()=>tlInstance.fit(),100); }
+  else {
+    tlInstance = new vis.Timeline(container, items, opts);
+    if(filtered.length) setTimeout(()=>tlInstance.fit(),100);
+    tlInstance.on('select', props => { if(props.items.length) openDetail(props.items[0]); });
+  }
+}
+
+function renderEvTable() {
+  const tbody = document.getElementById('ev-tbody');
+  const f = events.filter(e => {
+    const mq = !searchQ || e.titulo.toLowerCase().includes(searchQ);
+    const mc = !filterCat || e.categoria_id===Number(filterCat);
+    return mq && mc;
+  });
+  tbody.innerHTML = '';
+  document.getElementById('ev-empty').style.display = f.length===0?'block':'none';
+  f.forEach(e => {
+    const cat = getCat(e.categoria_id);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span style="font-weight:500">${e.titulo}</span>
+        ${e.imagen_url?'<span style="font-size:10px;color:var(--text3);margin-left:6px">📷</span>':''}
+        ${e.link?'<span style="font-size:10px;color:var(--text3);margin-left:4px">🔗</span>':''}
+      </td>
+      <td style="white-space:nowrap;font-size:12px;color:var(--text2)">${displayYear(e.anio_inicio)}</td>
+      <td style="white-space:nowrap;font-size:12px;color:var(--text2)">${e.anio_fin!=null?displayYear(e.anio_fin):'<span style="color:var(--text3)">—</span>'}</td>
+      <td>${cat?`<span class="badge" style="background:${cat.color}20;color:${cat.color}"><span class="dot" style="background:${cat.color}"></span>${cat.nombre}</span>`:'<span style="color:var(--text3)">—</span>'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-i" onclick="openDetail(${e.id})" title="Ver">👁</button>
+        <button class="btn-i" onclick="openEventModal(${e.id})" title="Editar">✏️</button>
+        <button class="btn-i d" onclick="deleteEvent(${e.id})" title="Eliminar">🗑</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderCatTable() {
+  const tbody = document.getElementById('cat-tbody');
+  tbody.innerHTML = '';
+  document.getElementById('cat-empty').style.display = cats.length===0?'block':'none';
+  cats.forEach(c => {
+    const count = events.filter(e => e.categoria_id===c.id).length;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:500">${c.nombre}</td>
+      <td><span class="badge" style="background:${c.color}20;color:${c.color}"><span class="dot" style="background:${c.color}"></span>${c.color}</span></td>
+      <td><span style="font-size:12px;color:var(--text2)">${count} evento${count!==1?'s':''}</span></td>
+      <td>
+        <button class="btn-i" onclick="openCatModal(${c.id})" title="Editar">✏️</button>
+        ${count===0?`<button class="btn-i d" onclick="deleteCat(${c.id})" title="Eliminar">🗑</button>`:''}
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function refreshSelects() {
+  const fc = document.getElementById('f-cat');
+  const pv = fc.value;
+  fc.innerHTML = '<option value="">Sin categoría</option>';
+  cats.forEach(c => fc.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
+  if(pv) fc.value = pv;
+  const fs = document.getElementById('filter-cat');
+  const pvf = fs.value;
+  fs.innerHTML = '<option value="">Todas las categorías</option>';
+  cats.forEach(c => fs.innerHTML += `<option value="${c.id}">${c.nombre}</option>`);
+  if(pvf) fs.value = pvf;
+}
+
+// ── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(t) {
+  ['timeline','eventos','categorias'].forEach((n,i) => {
+    document.getElementById('tab-'+n).style.display = n===t?'block':'none';
+    document.querySelectorAll('.tab')[i].classList.toggle('active', n===t);
+  });
+  if(t==='timeline' && tlInstance) setTimeout(()=>tlInstance.fit(),50);
+}
+function setSearch(v) { searchQ=v.toLowerCase(); renderEvTable(); }
+function setCatFilter(v) { filterCat=v; renderEvTable(); }
+
+// ── EVENTO MODAL ──────────────────────────────────────────────────────────────
+function openEventModal(id) {
+  editEvId = id || null;
+  pendingImgFile = null;
+  refreshSelects();
+  document.getElementById('ev-modal-title').textContent = id ? 'Editar evento' : 'Nuevo evento';
+  const preview = document.getElementById('f-img-preview');
+  preview.style.display = 'none'; preview.src = '';
+  document.getElementById('f-img-url').value = '';
+  document.getElementById('f-img-file').value = '';
+  if (id) {
+    const e = events.find(x => x.id===id);
+    document.getElementById('f-title').value = e.titulo;
+    document.getElementById('f-desc').value = e.descripcion||'';
+    document.getElementById('f-sy').value = Math.abs(e.anio_inicio);
+    document.getElementById('f-se').value = e.anio_inicio<0?'bce':'ce';
+    document.getElementById('f-smd').value = e.mes_dia_inicio||'';
+    document.getElementById('f-ey').value = e.anio_fin!=null?Math.abs(e.anio_fin):'';
+    document.getElementById('f-ee').value = (e.anio_fin!=null&&e.anio_fin<0)?'bce':'ce';
+    document.getElementById('f-emd').value = e.mes_dia_fin||'';
+    document.getElementById('f-cat').value = e.categoria_id||'';
+    document.getElementById('f-link').value = e.link||'';
+    if (e.imagen_url) { preview.src=e.imagen_url; preview.style.display='block'; document.getElementById('f-img-url').value=e.imagen_url; }
+  } else {
+    ['f-title','f-desc','f-sy','f-smd','f-ey','f-emd','f-link'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('f-se').value='ce'; document.getElementById('f-ee').value='ce';
+    document.getElementById('f-cat').value='';
+  }
+  document.getElementById('ev-modal').classList.add('open');
+}
+
+function previewImg(input) {
+  if (!input.files[0]) return;
+  pendingImgFile = input.files[0];
+  const reader = new FileReader();
+  reader.onload = e => { const p=document.getElementById('f-img-preview'); p.src=e.target.result; p.style.display='block'; };
+  reader.readAsDataURL(input.files[0]);
+}
+
+async function saveEvent() {
+  const title = document.getElementById('f-title').value.trim();
+  const syRaw = document.getElementById('f-sy').value;
+  if (!title||!syRaw) { toast('Título y año de inicio son obligatorios','err'); return; }
+  const btn = document.getElementById('btn-save-ev');
+  btn.textContent='Guardando...'; btn.disabled=true;
+  setSyncBadge('saving');
+  try {
+    const se = document.getElementById('f-se').value;
+    const startYear = se==='bce'?-Math.abs(parseInt(syRaw)):Math.abs(parseInt(syRaw));
+    const eyRaw = document.getElementById('f-ey').value;
+    let endYear = null;
+    if (eyRaw) { const ee=document.getElementById('f-ee').value; endYear=ee==='bce'?-Math.abs(parseInt(eyRaw)):Math.abs(parseInt(eyRaw)); }
+    const catVal = document.getElementById('f-cat').value;
+
+    let imgUrl = document.getElementById('f-img-url').value || null;
+    if (pendingImgFile) { imgUrl = await sbUpload(pendingImgFile); }
+
+    const body = {
+      titulo: title,
+      descripcion: document.getElementById('f-desc').value.trim()||null,
+      anio_inicio: startYear,
+      mes_dia_inicio: document.getElementById('f-smd').value.trim()||null,
+      anio_fin: endYear,
+      mes_dia_fin: document.getElementById('f-emd').value.trim()||null,
+      categoria_id: catVal?Number(catVal):null,
+      link: document.getElementById('f-link').value.trim()||null,
+      imagen_url: imgUrl
+    };
+
+    if (editEvId) {
+      const [updated] = await sbPatch('eventos', editEvId, body);
+      events = events.map(e => e.id===editEvId?updated:e);
+    } else {
+      const [created] = await sbPost('eventos', body);
+      events.push(created);
+    }
+    renderAll();
+    closeModal('ev-modal');
+    setSyncBadge('ok');
+    toast(editEvId?'Evento actualizado':'Evento creado');
+  } catch(err) {
+    console.error(err);
+    setSyncBadge('error');
+    toast('Error al guardar: '+err.message,'err');
+  }
+  btn.textContent='Guardar'; btn.disabled=false;
+  pendingImgFile=null;
+}
+
+async function deleteEvent(id) {
+  if (!confirm('¿Eliminar este evento?')) return;
+  try {
+    await sbDelete('eventos', id);
+    events = events.filter(e => e.id!==id);
+    renderAll(); closeModal('detail-modal');
+    toast('Evento eliminado');
+  } catch(err) { toast('Error: '+err.message,'err'); }
+}
+
+// ── CATEGORÍA MODAL ────────────────────────────────────────────────────────────
+function openCatModal(id) {
+  editCatId = id||null;
+  document.getElementById('cat-modal-title').textContent = id?'Editar categoría':'Nueva categoría';
+  if (id) { const c=cats.find(x=>x.id===id); document.getElementById('fc-name').value=c.nombre; document.getElementById('fc-color').value=c.color; }
+  else { document.getElementById('fc-name').value=''; document.getElementById('fc-color').value='#378ADD'; }
+  document.getElementById('cat-modal').classList.add('open');
+}
+async function saveCat() {
+  const nombre = document.getElementById('fc-name').value.trim();
+  if (!nombre) { toast('El nombre es obligatorio','err'); return; }
+  const body = { nombre, color: document.getElementById('fc-color').value };
+  try {
+    if (editCatId) {
+      const [u] = await sbPatch('categorias', editCatId, body);
+      cats = cats.map(c => c.id===editCatId?u:c);
+    } else {
+      const [created] = await sbPost('categorias', body);
+      cats.push(created);
+    }
+    renderAll(); closeModal('cat-modal');
+    toast(editCatId?'Categoría actualizada':'Categoría creada');
+  } catch(err) { toast('Error: '+err.message,'err'); }
+}
+async function deleteCat(id) {
+  if (!confirm('¿Eliminar esta categoría?')) return;
+  try { await sbDelete('categorias', id); cats=cats.filter(c=>c.id!==id); renderAll(); toast('Categoría eliminada'); }
+  catch(err) { toast('Error: '+err.message,'err'); }
+}
+
+// ── DETALLE ────────────────────────────────────────────────────────────────────
+async function openDetail(id) {
+  const e = events.find(x => x.id===id);
+  if (!e) return;
+  detailEvId = id;
+  const cat = getCat(e.categoria_id);
+  document.getElementById('d-title').textContent = e.titulo;
+  document.getElementById('d-edit-btn').onclick = () => { closeModal('detail-modal'); openEventModal(id); };
+
+  const img = document.getElementById('d-img');
+  if (e.imagen_url) { img.src=e.imagen_url; img.style.display='block'; } else { img.style.display='none'; img.src=''; }
+
+  const hasRange = e.anio_fin!=null && e.anio_fin!==e.anio_inicio;
+  document.getElementById('d-dates').innerHTML = `<div class="detail-label">Período</div>${displayYear(e.anio_inicio)}${hasRange?' → '+displayYear(e.anio_fin):''}`;
+  document.getElementById('d-cat').innerHTML = cat?`<div class="detail-label">Categoría</div><span class="badge" style="background:${cat.color}20;color:${cat.color}">${cat.nombre}</span>`:'';
+  document.getElementById('d-desc').innerHTML = e.descripcion?`<div class="detail-label">Descripción</div>${e.descripcion}`:'';
+  document.getElementById('d-link').innerHTML = e.link?`<div class="detail-label">Enlace</div><a class="detail-link" href="${e.link}" target="_blank" rel="noopener">${e.link}</a>`:'';
+
+  // Cargar comentarios
+  document.getElementById('d-comments').innerHTML = '<span style="color:var(--text3);font-size:12px">Cargando...</span>';
+  document.getElementById('new-comment').value = '';
+  document.getElementById('detail-modal').classList.add('open');
+  try {
+    const comments = await sbGet('comentarios', `evento_id=eq.${id}&order=created_at.asc`);
+    renderComments(comments);
+  } catch { document.getElementById('d-comments').innerHTML = '<span style="color:var(--text3);font-size:12px">Error al cargar comentarios</span>'; }
+}
+
+function renderComments(comments) {
+  const el = document.getElementById('d-comments');
+  if (!comments.length) { el.innerHTML='<span style="color:var(--text3);font-size:12px">Sin comentarios todavía</span>'; return; }
+  el.innerHTML = comments.map(c => `
+    <div class="comment-item">
+      ${c.texto}
+      <div class="comment-date">${new Date(c.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+      <button class="comment-del" onclick="deleteComment(${c.id},this.parentElement)">✕</button>
+    </div>`).join('');
+}
+
+async function addComment() {
+  const input = document.getElementById('new-comment');
+  const texto = input.value.trim();
+  if (!texto||!detailEvId) return;
+  try {
+    const [c] = await sbPost('comentarios', { evento_id: detailEvId, texto });
+    input.value='';
+    const el=document.getElementById('d-comments');
+    const noMsg=el.querySelector('span');
+    if(noMsg) el.innerHTML='';
+    el.innerHTML += `<div class="comment-item">${c.texto}<div class="comment-date">${new Date(c.created_at).toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div><button class="comment-del" onclick="deleteComment(${c.id},this.parentElement)">✕</button></div>`;
+    toast('Comentario agregado');
+  } catch(err) { toast('Error: '+err.message,'err'); }
+}
+
+async function deleteComment(id, el) {
+  try { await sbDelete('comentarios', id); el.remove(); toast('Comentario eliminado'); }
+  catch(err) { toast('Error: '+err.message,'err'); }
+}
+
+async function deleteFromDetail() { if(detailEvId) await deleteEvent(detailEvId); }
+
+// ── MODALES ────────────────────────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function handleBd(e,id) { if(e.target===document.getElementById(id)) closeModal(id); }
+
+init();
+</script>
+</body>
+</html>
